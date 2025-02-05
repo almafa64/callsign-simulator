@@ -1,0 +1,7 @@
+[package]
+name = "callsign-simulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fltk = { version = "1.5.3", features = ["fltk-bundled", "use-wayland", "no-pango"]}
