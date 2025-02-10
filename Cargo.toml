@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 fltk = { version = "1.5.3", features = ["fltk-bundled", "use-wayland", "no-pango"]}
+rodio = { version = "0.20.1", default-features = false, features = ["symphonia-mp3"] }
