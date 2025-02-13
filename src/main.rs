@@ -165,7 +165,7 @@ fn get_random_sound(sounds: &Vec<SamplesBuffer<f32>>) -> &SamplesBuffer<f32> {
 }
 
 fn main() {
-    let callsign = generate_callsign();
+    let callsign = Rc::new(generate_callsign());
     println!("{}", callsign);
 
     let phonetics = load_phonetics();
@@ -203,18 +203,33 @@ fn main() {
 
     let flex = Flex::new(0, height / 2, width, height / 2, "").column();
     let mut frame = Frame::new(0, 0, width, height / 2, "");
-    let mut but = Button::new(160, 210, 80, 40, "Check input");
+    let but_flex = Flex::new(0, 0, 0, 40, "").row();
+    let mut check_but = Button::new(160, 210, 80, 40, "Check input");
+    let mut play_but = Button::new(160, 210, 80, 40, "Play callsign");
+    but_flex.end();
     let input = Input::new(0, 0, 80, 40, "");
     flex.end();
     wind.end();
     wind.make_resizable(true);
     wind.show();
-    but.set_callback(move |_| {
-        if input.value().to_ascii_uppercase() == callsign {
+
+    let callsign_clone = Rc::clone(&callsign);
+    check_but.set_callback(move |_| {
+        if input.value().to_ascii_uppercase() == *callsign_clone {
             frame.set_label("Good");
         } else {
             frame.set_label("Bad");
         }
     });
+
+    let callsign_clone = Rc::clone(&callsign);
+    let sink_clone = Rc::clone(&sink);
+    play_but.set_callback(move |_| {
+        for c in callsign_clone.chars() {
+            let sound = get_random_sound(&phonetics.get(&c).unwrap()).clone();
+            sink_clone.append(sound);
+        }
+    });
+
     app.run().unwrap();
 }
