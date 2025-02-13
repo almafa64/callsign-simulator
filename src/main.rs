@@ -23,12 +23,14 @@ const ASCII_DIGITS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 //   2. (done) hashmap values are vectors because 1 char can have multiple sounds
 //   3. (done) debug: test out sounds with seperate buttons
 //   4. (done) randomize callsigns (+length)
-//   5. generate sound from callsign text
+//   5. (done) generate sound from callsign text
 //      py:
 //         sounds = phonetics[rd.choice(string.ascii_lowercase)] // get phonetic sounds for char (or digit)
 //         sound = rd.choice(sounds) // get one sound from multiple if any
-//   6. have user type in their answer and check it if match
-//   7. mix randomised noise in
+//   6. (done) have user type in their answer and check it if match
+//   7. generate new callsigns
+//   8. modify speed (random or user set)
+//   9. mix randomised noise in
 // Extras
 //   - Real callsign from web with scraping/api
 //   - Option to use custom sounds from folder (if sound x exists in sounds folder use that instead)
