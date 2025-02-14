@@ -225,7 +225,7 @@ fn main() {
     test_flex.end();
 
     let flex = Flex::new(0, HEIGHT / 2, WIDTH, HEIGHT / 2, "").column();
-    let mut output_frame = Frame::new(0, 0, WIDTH, HEIGHT / 4, "");
+    let output_frame = Rc::new(RefCell::new(Frame::new(0, 0, WIDTH, HEIGHT / 4, "")));
 
     let but_flex = Flex::new(0, 0, 0, 40, "").row();
     let mut check_but = Button::new(0, 0, 80, 40, "Check input");
@@ -242,28 +242,49 @@ fn main() {
     wind.make_resizable(true);
     wind.show();
 
+    let output_frame_clone = Rc::clone(&output_frame);
+    let sink_clone = Rc::clone(&sink);
     let callsign_clone = Rc::clone(&callsign);
     new_but.set_callback(move |_| {
+        if !sink_clone.empty() {
+            output_frame_clone
+                .borrow_mut()
+                .set_label("Cannot generate new callsign while playing current");
+            return;
+        }
+
+        output_frame_clone
+            .borrow_mut()
+            .set_label("Generated new callsign");
+
         *callsign_clone.borrow_mut() = generate_callsign(&phonetics);
     });
 
     let callsign_clone = Rc::clone(&callsign);
     let input_clone = Rc::clone(&callsign_input);
+    let output_frame_clone = Rc::clone(&output_frame);
     check_but.set_callback(move |_| {
         if input_clone.borrow().value().to_ascii_uppercase() == callsign_clone.borrow().text {
-            output_frame.set_label("Good\nGenerated new call");
+            output_frame_clone
+                .borrow_mut()
+                .set_label("Correct\nGenerated new callsign");
             new_but.do_callback();
         } else {
-            output_frame.set_label("Bad");
+            output_frame_clone.borrow_mut().set_label("Wrong");
         }
     });
 
+    let output_frame_clone = Rc::clone(&output_frame);
     let callsign_clone = Rc::clone(&callsign);
     let sink_clone = Rc::clone(&sink);
     play_but.set_callback(move |_| {
         if !sink_clone.empty() {
             return;
         }
+
+        output_frame_clone
+            .borrow_mut()
+            .set_label("Playing callsign...");
 
         for e in callsign_clone.borrow().audio.iter() {
             sink_clone.append(e.clone());
