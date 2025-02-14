@@ -25,6 +25,8 @@ use rand::prelude::*;
 
 const ASCII_UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const ASCII_DIGITS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const WIDTH: i32 = 800;
+const HEIGHT: i32 = 400;
 
 // ToDo
 //   0. (done, tts) record audios
@@ -208,10 +210,9 @@ fn main() {
     let handle_rc = Rc::new(handle);
 
     let app = app::App::default();
-    let (width, height) = (800, 400);
-    let mut wind = Window::new(0, 0, width, height, "Callsign simulator").center_screen();
+    let mut wind = Window::new(0, 0, WIDTH, HEIGHT, "Callsign simulator").center_screen();
 
-    let test_flex = Flex::new(0, 0, width, 30, "").row();
+    let test_flex = Flex::new(0, 0, WIDTH, 30, "").row();
     for (character, sounds) in phonetics.iter().sorted_by_key(|x| x.0) {
         let mut but = Button::new(0, 0, 20, 0, character.to_string().as_str());
         let sounds_clone = Rc::clone(&sounds);
@@ -223,8 +224,8 @@ fn main() {
     }
     test_flex.end();
 
-    let flex = Flex::new(0, height / 2, width, height / 2, "").column();
-    let mut output_frame = Frame::new(0, 0, width, height / 4, "");
+    let flex = Flex::new(0, HEIGHT / 2, WIDTH, HEIGHT / 2, "").column();
+    let mut output_frame = Frame::new(0, 0, WIDTH, HEIGHT / 4, "");
 
     let but_flex = Flex::new(0, 0, 0, 40, "").row();
     let mut check_but = Button::new(0, 0, 80, 40, "Check input");
