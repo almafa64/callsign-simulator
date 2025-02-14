@@ -206,8 +206,8 @@ fn main() {
     let callsign = Rc::new(RefCell::new(generate_callsign(&phonetics)));
 
     let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
+    let handle = Rc::new(handle);
     let sink = Rc::new(rodio::Sink::try_new(&handle).unwrap());
-    let handle_rc = Rc::new(handle);
 
     let app = app::App::default();
     let mut wind = Window::new(0, 0, WIDTH, HEIGHT, "Callsign simulator").center_screen();
@@ -215,11 +215,11 @@ fn main() {
     let test_flex = Flex::new(0, 0, WIDTH, 30, "").row();
     for (character, sounds) in phonetics.iter().sorted_by_key(|x| x.0) {
         let mut but = Button::new(0, 0, 20, 0, character.to_string().as_str());
-        let sounds_clone = Rc::clone(&sounds);
-        let handle_clone = Rc::clone(&handle_rc);
+        let sounds = Rc::clone(&sounds);
+        let handle = Rc::clone(&handle);
         but.set_callback(move |_| {
-            let sound = get_random_sound(&sounds_clone).clone();
-            handle_clone.play_raw(sound).unwrap();
+            let sound = get_random_sound(&sounds).clone();
+            handle.play_raw(sound).unwrap();
         });
     }
     test_flex.end();
@@ -242,54 +242,58 @@ fn main() {
     wind.make_resizable(true);
     wind.show();
 
-    let output_frame_clone = Rc::clone(&output_frame);
-    let sink_clone = Rc::clone(&sink);
-    let callsign_clone = Rc::clone(&callsign);
-    new_but.set_callback(move |_| {
-        if !sink_clone.empty() {
-            output_frame_clone
+    {
+        let output_frame = Rc::clone(&output_frame);
+        let sink = Rc::clone(&sink);
+        let callsign = Rc::clone(&callsign);
+        new_but.set_callback(move |_| {
+            if !sink.empty() {
+                output_frame
+                    .borrow_mut()
+                    .set_label("Cannot generate new callsign while playing current");
+                return;
+            }
+
+            output_frame
                 .borrow_mut()
-                .set_label("Cannot generate new callsign while playing current");
-            return;
-        }
+                .set_label("Generated new callsign");
 
-        output_frame_clone
-            .borrow_mut()
-            .set_label("Generated new callsign");
+            *callsign.borrow_mut() = generate_callsign(&phonetics);
+        });
+    }
 
-        *callsign_clone.borrow_mut() = generate_callsign(&phonetics);
-    });
+    {
+        let callsign = Rc::clone(&callsign);
+        let callsign_input = Rc::clone(&callsign_input);
+        let output_frame = Rc::clone(&output_frame);
+        check_but.set_callback(move |_| {
+            if callsign_input.borrow().value().to_ascii_uppercase() == callsign.borrow().text {
+                output_frame
+                    .borrow_mut()
+                    .set_label("Correct\nGenerated new callsign");
+                new_but.do_callback();
+            } else {
+                output_frame.borrow_mut().set_label("Wrong");
+            }
+        });
+    }
 
-    let callsign_clone = Rc::clone(&callsign);
-    let input_clone = Rc::clone(&callsign_input);
-    let output_frame_clone = Rc::clone(&output_frame);
-    check_but.set_callback(move |_| {
-        if input_clone.borrow().value().to_ascii_uppercase() == callsign_clone.borrow().text {
-            output_frame_clone
-                .borrow_mut()
-                .set_label("Correct\nGenerated new callsign");
-            new_but.do_callback();
-        } else {
-            output_frame_clone.borrow_mut().set_label("Wrong");
-        }
-    });
+    {
+        let output_frame = Rc::clone(&output_frame);
+        let callsign = Rc::clone(&callsign);
+        let sink = Rc::clone(&sink);
+        play_but.set_callback(move |_| {
+            if !sink.empty() {
+                return;
+            }
 
-    let output_frame_clone = Rc::clone(&output_frame);
-    let callsign_clone = Rc::clone(&callsign);
-    let sink_clone = Rc::clone(&sink);
-    play_but.set_callback(move |_| {
-        if !sink_clone.empty() {
-            return;
-        }
+            output_frame.borrow_mut().set_label("Playing callsign...");
 
-        output_frame_clone
-            .borrow_mut()
-            .set_label("Playing callsign...");
-
-        for e in callsign_clone.borrow().audio.iter() {
-            sink_clone.append(e.clone());
-        }
-    });
+            for e in callsign.borrow().audio.iter() {
+                sink.append(e.clone());
+            }
+        });
+    }
 
     callsign_input
         .borrow_mut()
@@ -298,10 +302,12 @@ fn main() {
         check_but.do_callback();
     });
 
-    let sink_clone = Rc::clone(&sink);
-    speed_slider.set_callback(move |s| {
-        sink_clone.set_speed(s.value() as f32 + 1.0);
-    });
+    {
+        let sink = Rc::clone(&sink);
+        speed_slider.set_callback(move |s| {
+            sink.set_speed(s.value() as f32 + 1.0);
+        });
+    }
 
     app.run().unwrap();
 }
