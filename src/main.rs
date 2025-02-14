@@ -25,7 +25,7 @@ const ASCII_DIGITS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 //      py:
 //         sounds = phonetics[rd.choice(string.ascii_lowercase)] // get phonetic sounds for char (or digit)
 //         sound = rd.choice(sounds) // get one sound from multiple if any
-//   6. cache callsign audio (so it doesnt change each play and no need to clone sounds again)
+//   6. (done) cache callsign audio (so it doesnt change each play)
 //   7. (done) have user type in their answer and check it if match
 //   8. generate new callsigns
 //   9. (half done) modify speed (random or user set)
@@ -76,6 +76,13 @@ const SOUND_7: &[u8] = include_bytes!("sounds/7.mp3");
 const SOUND_8: &[u8] = include_bytes!("sounds/8.mp3");
 const SOUND_9: &[u8] = include_bytes!("sounds/9.mp3");
 
+struct Callsign {
+    text: String,
+    audio: Vec<SamplesBuffer<f32>>
+}
+
+type Phonetics = HashMap<char, Rc<Vec<SamplesBuffer<f32>>>>;
+
 fn get_playable_audio(audio_byte_array: &'static [u8]) -> SamplesBuffer<f32> {
     let cursor = Cursor::new(audio_byte_array);
     let decoder = rodio::Decoder::new_mp3(BufReader::new(cursor)).unwrap();
@@ -93,7 +100,7 @@ fn generate_x_chars(count: usize) -> String {
         .collect()
 }
 
-fn generate_callsign() -> String {
+fn generate_callsign(phonetics: &Phonetics) -> Callsign {
     let mut rd = rand::rng();
 
     let prefix_len = rd.random_range(1..=2);
@@ -104,10 +111,22 @@ fn generate_callsign() -> String {
     let suffix_len = rd.random_range(1..=4);
     let suffix = generate_x_chars(suffix_len);
 
-    format!("{}{}{}", prefix, zone_num, suffix)
+    let text = format!("{}{}{}", prefix, zone_num, suffix);
+
+    let mut callsign = Callsign {
+        text,
+        audio: Vec::new()
+    };
+
+    for c in callsign.text.clone().chars() {
+        let sound = get_random_sound(phonetics.get(&c).unwrap()).clone();
+        callsign.audio.push(sound);
+    }
+
+    callsign
 }
 
-fn load_phonetics() -> HashMap<char, Rc<Vec<SamplesBuffer<f32>>>> {
+fn load_phonetics() -> Phonetics {
     let mut phonetics = HashMap::new();
 
     let all_sounds: [Vec<&[u8]>; 36] = [
@@ -166,10 +185,10 @@ fn get_random_sound(sounds: &Vec<SamplesBuffer<f32>>) -> &SamplesBuffer<f32> {
 }
 
 fn main() {
-    let callsign = Rc::new(generate_callsign());
-    println!("{}", callsign);
-
     let phonetics = load_phonetics();
+    
+    let callsign = Rc::new(generate_callsign(&phonetics));
+    println!("{}", callsign.text);
 
     let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
     let sink = Rc::new(rodio::Sink::try_new(&handle).unwrap());
@@ -186,62 +205,60 @@ fn main() {
         "Callsign simulator",
     );
 
-    // DEBUG
     let test_flex = Flex::new(0, 0, width, 30, "").row();
     for (character, sounds) in phonetics.iter().sorted_by_key(|x| x.0) {
         let mut but = Button::new(0, 0, 20, 0, character.to_string().as_str());
-        let sink_clone = Rc::clone(&sink);
         let sounds_clone = Rc::clone(&sounds);
         let handle_clone = Rc::clone(&handle_rc);
         but.set_callback(move |_| {
             let sound = get_random_sound(&sounds_clone).clone();
             handle_clone.play_raw(sound).unwrap();
-            //sink_clone.append(sound);
         });
     }
     test_flex.end();
-    // DEBUG END
 
     let flex = Flex::new(0, height / 2, width, height / 2, "").column();
-    let mut frame = Frame::new(0, 0, width, height / 4, "");
+    let mut output_frame = Frame::new(0, 0, width, height / 4, "");
+    
     let but_flex = Flex::new(0, 0, 0, 40, "").row();
     let mut check_but = Button::new(160, 210, 80, 40, "Check input");
     let mut play_but = Button::new(160, 210, 80, 40, "Play callsign");
     but_flex.end();
-    let input = Rc::new(RefCell::new(Input::new(0, 0, 80, 40, "")));
-    let mut slider = Slider::new(0, 0, 0, 20, "speed");
-    slider.set_type(SliderType::HorizontalNice);
+    
+    let callsign_input = Rc::new(RefCell::new(Input::new(0, 0, 80, 40, "")));
+    let mut speed_slider = Slider::new(0, 0, 0, 20, "speed");
+    speed_slider.set_type(SliderType::HorizontalNice);
     flex.end();
+    
     wind.end();
     wind.make_resizable(true);
     wind.show();
 
     let callsign_clone = Rc::clone(&callsign);
-    let input_clone = Rc::clone(&input);
+    let input_clone = Rc::clone(&callsign_input);
     check_but.set_callback(move |_| {
-        if input_clone.borrow().value().to_ascii_uppercase() == *callsign_clone {
-            frame.set_label("Good");
+        if input_clone.borrow().value().to_ascii_uppercase() == callsign_clone.text {
+            output_frame.set_label("Good");
         } else {
-            frame.set_label("Bad");
+            output_frame.set_label("Bad");
         }
     });
 
     let callsign_clone = Rc::clone(&callsign);
     let sink_clone = Rc::clone(&sink);
     play_but.set_callback(move |_| {
-        for c in callsign_clone.chars() {
-            let sound = get_random_sound(&phonetics.get(&c).unwrap()).clone();
-            sink_clone.append(sound);
+        for e in callsign_clone.audio.iter() {
+            sink_clone.append(e.clone());
         }
     });
 
-    input.borrow_mut().set_trigger(CallbackTrigger::EnterKey);
-    input.borrow_mut().set_callback(move |_| {
+    callsign_input.borrow_mut().set_trigger(CallbackTrigger::EnterKey);
+    callsign_input.borrow_mut().set_callback(move |_| {
         check_but.do_callback();
     });
 
     let sink_clone = Rc::clone(&sink);
-    slider.set_callback(move |s| {
+    speed_slider.set_callback(move |s| {
         sink_clone.set_speed(s.value() as f32 + 1.0);
     });
 
