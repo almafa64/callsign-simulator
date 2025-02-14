@@ -261,6 +261,10 @@ fn main() {
     let callsign_clone = Rc::clone(&callsign);
     let sink_clone = Rc::clone(&sink);
     play_but.set_callback(move |_| {
+        if !sink_clone.empty() {
+            return;
+        }
+
         for e in callsign_clone.borrow().audio.iter() {
             sink_clone.append(e.clone());
         }
