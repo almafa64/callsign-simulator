@@ -7,4 +7,4 @@ edition = "2021"
 fltk = { version = "1.5.3", features = ["fltk-bundled", "use-wayland", "no-pango"]}
 itertools = "0.14.0"
 rand = "0.9.0"
-rodio = { version = "0.20.1", default-features = false, features = ["symphonia-mp3"] }
+rodio = { version = "0.20.1", default-features = false, features = ["symphonia-mp3", "noise"] }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use fltk::{
-    app, button::Button, enums::CallbackTrigger, frame::Frame, group::Flex, input::Input, prelude::*, window::Window
+    app, button::Button, enums::CallbackTrigger, frame::Frame, group::Flex, input::Input, prelude::*, valuator::{Slider, SliderType}, window::Window
 };
 use itertools::Itertools;
 use rodio::{buffer::SamplesBuffer, Source};
@@ -28,7 +28,7 @@ const ASCII_DIGITS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 //   6. cache callsign audio (so it doesnt change each play and no need to clone sounds again)
 //   7. (done) have user type in their answer and check it if match
 //   8. generate new callsigns
-//   9. modify speed (random or user set)
+//   9. (half done) modify speed (random or user set)
 //   10. mix randomised noise in
 // Extras
 //   - Real callsign from web with scraping/api
@@ -203,12 +203,14 @@ fn main() {
     // DEBUG END
 
     let flex = Flex::new(0, height / 2, width, height / 2, "").column();
-    let mut frame = Frame::new(0, 0, width, height / 2, "");
+    let mut frame = Frame::new(0, 0, width, height / 4, "");
     let but_flex = Flex::new(0, 0, 0, 40, "").row();
     let mut check_but = Button::new(160, 210, 80, 40, "Check input");
     let mut play_but = Button::new(160, 210, 80, 40, "Play callsign");
     but_flex.end();
     let input = Rc::new(RefCell::new(Input::new(0, 0, 80, 40, "")));
+    let mut slider = Slider::new(0, 0, 0, 20, "speed");
+    slider.set_type(SliderType::HorizontalNice);
     flex.end();
     wind.end();
     wind.make_resizable(true);
@@ -236,6 +238,11 @@ fn main() {
     input.borrow_mut().set_trigger(CallbackTrigger::EnterKey);
     input.borrow_mut().set_callback(move |_| {
         check_but.do_callback();
+    });
+
+    let sink_clone = Rc::clone(&sink);
+    slider.set_callback(move |s| {
+        sink_clone.set_speed(s.value() as f32 + 1.0);
     });
 
     app.run().unwrap();
