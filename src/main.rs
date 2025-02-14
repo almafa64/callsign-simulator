@@ -1,11 +1,22 @@
 //#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
-    cell::RefCell, collections::HashMap, io::{BufReader, Cursor}, rc::Rc
+    cell::RefCell,
+    collections::HashMap,
+    io::{BufReader, Cursor},
+    rc::Rc,
 };
 
 use fltk::{
-    app, button::Button, enums::CallbackTrigger, frame::Frame, group::Flex, input::Input, prelude::*, valuator::{Slider, SliderType}, window::Window
+    app,
+    button::Button,
+    enums::CallbackTrigger,
+    frame::Frame,
+    group::Flex,
+    input::Input,
+    prelude::*,
+    valuator::{Slider, SliderType},
+    window::Window,
 };
 use itertools::Itertools;
 use rodio::{buffer::SamplesBuffer, Source};
@@ -27,13 +38,14 @@ const ASCII_DIGITS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 //         sound = rd.choice(sounds) // get one sound from multiple if any
 //   6. (done) cache callsign audio (so it doesnt change each play)
 //   7. (done) have user type in their answer and check it if match
-//   8. generate new callsigns
+//   8. (done) generate new callsigns
 //   9. (half done) modify speed (random or user set)
 //   10. mix randomised noise in
 // Extras
 //   - Real callsign from web with scraping/api
 //   - Option to use custom sounds from folder (if sound x exists in sounds folder use that instead)
 //   - Overlaping calls
+//   - Location definers (/P, /M, etc)
 
 // Callsign:
 //   <1-2 char country code><1 number><1-4 char>
@@ -78,7 +90,7 @@ const SOUND_9: &[u8] = include_bytes!("sounds/9.mp3");
 
 struct Callsign {
     text: String,
-    audio: Vec<SamplesBuffer<f32>>
+    audio: Vec<SamplesBuffer<f32>>,
 }
 
 type Phonetics = HashMap<char, Rc<Vec<SamplesBuffer<f32>>>>;
@@ -115,13 +127,15 @@ fn generate_callsign(phonetics: &Phonetics) -> Callsign {
 
     let mut callsign = Callsign {
         text,
-        audio: Vec::new()
+        audio: Vec::new(),
     };
 
     for c in callsign.text.clone().chars() {
         let sound = get_random_sound(phonetics.get(&c).unwrap()).clone();
         callsign.audio.push(sound);
     }
+
+    println!("{}", callsign.text); // DEBUG
 
     callsign
 }
@@ -186,24 +200,16 @@ fn get_random_sound(sounds: &Vec<SamplesBuffer<f32>>) -> &SamplesBuffer<f32> {
 
 fn main() {
     let phonetics = load_phonetics();
-    
-    let callsign = Rc::new(generate_callsign(&phonetics));
-    println!("{}", callsign.text);
+
+    let callsign = Rc::new(RefCell::new(generate_callsign(&phonetics)));
 
     let (_stream, handle) = rodio::OutputStream::try_default().unwrap();
     let sink = Rc::new(rodio::Sink::try_new(&handle).unwrap());
     let handle_rc = Rc::new(handle);
 
     let app = app::App::default();
-    let (mon_width, mon_height) = app::screen_size();
     let (width, height) = (800, 400);
-    let mut wind = Window::new(
-        (mon_width / 2.0 - (width as f64) / 2.0) as i32,
-        (mon_height / 2.0 - (height as f64) / 2.0) as i32,
-        width,
-        height,
-        "Callsign simulator",
-    );
+    let mut wind = Window::new(0, 0, width, height, "Callsign simulator").center_screen();
 
     let test_flex = Flex::new(0, 0, width, 30, "").row();
     for (character, sounds) in phonetics.iter().sorted_by_key(|x| x.0) {
@@ -219,26 +225,33 @@ fn main() {
 
     let flex = Flex::new(0, height / 2, width, height / 2, "").column();
     let mut output_frame = Frame::new(0, 0, width, height / 4, "");
-    
+
     let but_flex = Flex::new(0, 0, 0, 40, "").row();
-    let mut check_but = Button::new(160, 210, 80, 40, "Check input");
-    let mut play_but = Button::new(160, 210, 80, 40, "Play callsign");
+    let mut check_but = Button::new(0, 0, 80, 40, "Check input");
+    let mut play_but = Button::new(0, 0, 80, 40, "Play callsign");
+    let mut new_but = Button::new(0, 0, 80, 40, "New callsign");
     but_flex.end();
-    
+
     let callsign_input = Rc::new(RefCell::new(Input::new(0, 0, 80, 40, "")));
     let mut speed_slider = Slider::new(0, 0, 0, 20, "speed");
     speed_slider.set_type(SliderType::HorizontalNice);
     flex.end();
-    
+
     wind.end();
     wind.make_resizable(true);
     wind.show();
 
     let callsign_clone = Rc::clone(&callsign);
+    new_but.set_callback(move |_| {
+        *callsign_clone.borrow_mut() = generate_callsign(&phonetics);
+    });
+
+    let callsign_clone = Rc::clone(&callsign);
     let input_clone = Rc::clone(&callsign_input);
     check_but.set_callback(move |_| {
-        if input_clone.borrow().value().to_ascii_uppercase() == callsign_clone.text {
-            output_frame.set_label("Good");
+        if input_clone.borrow().value().to_ascii_uppercase() == callsign_clone.borrow().text {
+            output_frame.set_label("Good\nGenerated new call");
+            new_but.do_callback();
         } else {
             output_frame.set_label("Bad");
         }
@@ -247,12 +260,14 @@ fn main() {
     let callsign_clone = Rc::clone(&callsign);
     let sink_clone = Rc::clone(&sink);
     play_but.set_callback(move |_| {
-        for e in callsign_clone.audio.iter() {
+        for e in callsign_clone.borrow().audio.iter() {
             sink_clone.append(e.clone());
         }
     });
 
-    callsign_input.borrow_mut().set_trigger(CallbackTrigger::EnterKey);
+    callsign_input
+        .borrow_mut()
+        .set_trigger(CallbackTrigger::EnterKey);
     callsign_input.borrow_mut().set_callback(move |_| {
         check_but.do_callback();
     });
