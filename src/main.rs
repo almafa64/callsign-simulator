@@ -191,12 +191,14 @@ fn load_phonetics() -> Phonetics {
             let new_sample = SamplesBuffer::new(
                 sample.channels(),
                 sample.sample_rate(),
-                Vec::from_iter(sample.filter(|x| *x != 0.0)),
+                Vec::from_iter(sample.filter(|x| x.abs() > 0.0001)),
             );
             buffered_sounds.push(new_sample);
         }
         phonetics.insert(character, Rc::new(buffered_sounds));
     }
+
+    println!("{:?}", phonetics.get(&'A').unwrap()[0]);
 
     phonetics
 }
