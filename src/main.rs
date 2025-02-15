@@ -101,7 +101,10 @@ fn get_playable_audio(audio_byte_array: &'static [u8]) -> SamplesBuffer<f32> {
     let cursor = Cursor::new(audio_byte_array);
     let decoder = rodio::Decoder::new_mp3(BufReader::new(cursor)).unwrap();
     let (channels, sample_rate) = (decoder.channels(), decoder.sample_rate());
-    let samples: Vec<f32> = decoder.convert_samples().collect();
+    let samples: Vec<f32> = decoder
+        .convert_samples()
+        .filter(|x: &f32| x.abs() > 0.00001)
+        .collect();
     rodio::buffer::SamplesBuffer::new(channels, sample_rate, samples)
 }
 
@@ -187,18 +190,10 @@ fn load_phonetics() -> Phonetics {
     for (sounds, character) in all_sounds.iter().zip(ASCII_DIGITS.chars()) {
         let mut buffered_sounds: Vec<SamplesBuffer<f32>> = Vec::new();
         for sound in sounds {
-            let sample = get_playable_audio(sound);
-            let new_sample = SamplesBuffer::new(
-                sample.channels(),
-                sample.sample_rate(),
-                Vec::from_iter(sample.filter(|x| x.abs() > 0.0001)),
-            );
-            buffered_sounds.push(new_sample);
+            buffered_sounds.push(get_playable_audio(sound));
         }
         phonetics.insert(character, Rc::new(buffered_sounds));
     }
-
-    println!("{:?}", phonetics.get(&'A').unwrap()[0]);
 
     phonetics
 }
