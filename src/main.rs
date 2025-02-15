@@ -187,7 +187,13 @@ fn load_phonetics() -> Phonetics {
     for (sounds, character) in all_sounds.iter().zip(ASCII_DIGITS.chars()) {
         let mut buffered_sounds: Vec<SamplesBuffer<f32>> = Vec::new();
         for sound in sounds {
-            buffered_sounds.push(get_playable_audio(sound));
+            let sample = get_playable_audio(sound);
+            let new_sample = SamplesBuffer::new(
+                sample.channels(),
+                sample.sample_rate(),
+                Vec::from_iter(sample.filter(|x| *x != 0.0)),
+            );
+            buffered_sounds.push(new_sample);
         }
         phonetics.insert(character, Rc::new(buffered_sounds));
     }
